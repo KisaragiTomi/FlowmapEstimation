@@ -1,1 +1,13 @@
-./models/basemodel.pth
+/models/basemodel.pth
+/datasets
+/experiments
+/env
+/figs
+/FluidFluxData
+/gen-efficientnet-pytorch
+/examples.zip
+/LICENSE
+/nyu.pt
+/nyu_dataset.zip
+/pexels-vecislavas-popa-1571460.jpg
+/requirements.txt
