@@ -164,10 +164,16 @@ def train(model, args, device):
         params = [{"params": m.get_1x_lr_params(), "lr": args.lr / 10},
                   {"params": m.get_10x_lr_params(), "lr": args.lr}]
     optimizer = optim.AdamW(params, weight_decay=args.weight_decay, lr=args.lr)
-    optimizer_D = torch.optim.Adam(discriminator.parameters(), lr=4 * 0.001)
+    optimizer_D = optim.AdamW(discriminator.parameters(), lr=4 * 0.001)
 
     # learning rate scheduler
     scheduler = optim.lr_scheduler.OneCycleLR(optimizer=optimizer,
+                                              max_lr=args.lr,
+                                              epochs=args.n_epochs,
+                                              steps_per_epoch=len(train_loader),
+                                              div_factor=args.div_factor,
+                                              final_div_factor=args.final_div_factor)
+    scheduler_D = optim.lr_scheduler.OneCycleLR(optimizer=optimizer_D,
                                               max_lr=args.lr,
                                               epochs=args.n_epochs,
                                               steps_per_epoch=len(train_loader),
