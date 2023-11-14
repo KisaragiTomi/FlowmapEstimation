@@ -102,7 +102,7 @@ class Discriminator(nn.Module):
     def __init__(self):
         super(Discriminator, self).__init__()
         self.model = nn.Sequential(
-            nn.Conv2d(1, 32, 4, 1, 0),
+            nn.Conv2d(3, 32, 4, 1, 0),
             nn.BatchNorm2d(32),
             nn.ReLU(True),
             nn.MaxPool2d(2),
@@ -114,14 +114,17 @@ class Discriminator(nn.Module):
             nn.BatchNorm2d(32),
             nn.ReLU(True)
         )
-        self.out = nn.Linear(32, 1)
+        self.out = nn.Linear(128, 1)
 
     def forward(self, x):
         x = self.model(x)
-        x = x.view(-1, 32)
+        x = x.view(-1, 128)
         x = self.out(x)
         return torch.sigmoid(x)
-
+def set_requires_grad(net, requires_grad=False):
+    if net is not None:
+        for param in net.parameters():
+            param.requires_grad = requires_grad
 
 def train(model, args, device):
     if device is None:
@@ -142,7 +145,7 @@ def train(model, args, device):
     # define losses
     loss_fn = compute_loss(args)
 
-    discriminator = Discriminator().double()
+    discriminator = Discriminator()
     discriminator.apply(weights_init)
     discriminator = discriminator.cuda()
     discriminator = nn.DataParallel(discriminator)
@@ -165,6 +168,8 @@ def train(model, args, device):
                   {"params": m.get_10x_lr_params(), "lr": args.lr}]
     optimizer = optim.AdamW(params, weight_decay=args.weight_decay, lr=args.lr)
     optimizer_D = optim.AdamW(discriminator.parameters(), lr=4 * 0.001)
+    valid_T = torch.ones(args.batch_size, 1).cuda()
+    zeros_T = torch.zeros(args.batch_size, 1).cuda()
 
     # learning rate scheduler
     scheduler = optim.lr_scheduler.OneCycleLR(optimizer=optimizer,
@@ -184,6 +189,7 @@ def train(model, args, device):
     torch.backends.cudnn.enabled = True
     torch.backends.cudnn.benchmark = True
     scaler = torch.cuda.amp.GradScaler()
+    scaler_D = torch.cuda.amp.GradScaler()
 
     # start training
     total_iter = 0
@@ -198,6 +204,7 @@ def train(model, args, device):
         for data_dict in t_loader:
             test += 1
             optimizer.zero_grad()
+            optimizer_D.zero_grad()
             total_iter += args.batch_size_orig
 
             # data to device
@@ -273,10 +280,59 @@ def train(model, args, device):
             nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
             scaler.step(optimizer)
             scaler.update()
-
-
             # lr scheduler
             scheduler.step()
+
+            #patchGAN
+            # loss_L1 = criterion_L1(pred, target)
+            # loss_MSE = criterion_MSE(pred, target)
+            # loss_berHu = criterion_berHu(pred, target)
+            # loss_SI = criterion_SI(pred, target)
+            #
+            # set_requires_grad(discriminator, False)
+            #
+            # loss_adv = 0
+            #
+            # for a in range(12):
+            #     for b in range(16):
+            #         row = 19 * a
+            #         col = 19 * b
+            #         patch_fake = pred[:, :, row:row + 19, col:col + 19]
+            #         pred_fake = discriminator(patch_fake)
+            #         loss_adv += criterion_GAN(pred_fake, valid_T)
+            #
+            # loss_gen = loss_SI + 0.5 * loss_adv
+            # loss_gen.backward()
+
+
+            set_requires_grad(discriminator, True)
+            optimizer_D.zero_grad()
+            loss_D = 0
+            norm_out = norm_out_list[-1]
+            pred = norm_out[:, :3, :, :]
+
+            for a in range(12):
+                for b in range(16):
+                    row = 39 * a
+                    col = 39 * b
+                    pred_norm = pred[:, 0:3, :, :]
+                    patch_fake = pred_norm[:, :, row:row + 39, col:col + 39]
+                    patch_real = gt_norm[:, :, row:row + 39, col:col + 39]
+                    pred_fake = discriminator(patch_fake.detach())
+                    pred_real = discriminator(patch_real)
+                    loss_D_fake = criterion_GAN(pred_fake, zeros_T)
+                    loss_D_real = criterion_GAN(pred_real, valid_T)
+                    loss_D += 0.5 * (loss_D_fake + loss_D_real)
+
+            scaler_D.scale(loss_D).backward()
+            scaler_D.unscale_(optimizer_D)
+            nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
+            scaler_D.step(optimizer_D)
+            scaler_D.update()
+
+            scheduler_D.step()
+
+
 
             # visualize
             if should_write and ((total_iter % args.visualize_every) < args.batch_size_orig):
