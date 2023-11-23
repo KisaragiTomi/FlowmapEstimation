@@ -1,6 +1,12 @@
 import random
 import numpy as np
 from PIL import Image
+from imageio import imread, imwrite
+import imageio
+from scipy.ndimage import zoom
+import scipy
+import matplotlib.pyplot as plt
+import cv2
 
 import torch
 import torch.utils.data.distributed
@@ -69,8 +75,8 @@ class NyuLoadPreprocess(Dataset):
         img_name = img_path.split('/')[-1].split('.png')[0]
 
         # read img / normal
-        imga = Image.open(img_path).convert("RGBA").resize(size=(self.input_width, self.input_height),
-                                                            resample=Image.BILINEAR)
+        imga = imread(img_path).astype(np.float32)
+        #imga = Image.open(img_path).convert("RGBA").resize(size=(self.input_width, self.input_height),resample=Image.BILINEAR)
         norm_gta = Image.open(norm_path).convert("RGBA").resize(size=(self.input_width, self.input_height),
                                                             resample=Image.BILINEAR)
 
@@ -83,9 +89,13 @@ class NyuLoadPreprocess(Dataset):
                 norm_gt = TF.hflip(norm_gt)
 
         # to array
-        imga = np.array(imga).astype(np.float32) / 255.0
-        img = imga[:, :, :3]
-        ww = imga[:, :, 3]
+        scaling_factors = [new_size / old_size for new_size, old_size in zip((self.input_height, self.input_width), imga.shape)]
+        img = zoom(imga, zoom=scaling_factors)
+        img = img.reshape(self.input_height, self.input_width, 1)
+        #img.repeat(3, axis=-1)
+
+        img = img / 65535.0
+        ww = img[:, :, 0]
         #ww = np.repeat(ww, 3, axis=2)
 
         norm_gta = np.array(norm_gta).astype(np.uint8)
@@ -94,13 +104,7 @@ class NyuLoadPreprocess(Dataset):
         #ww_gt = np.repeat(ww_gt, 3, axis=2)
 
 
-        norm_valid_mask = np.logical_not(
-            np.logical_and(
-                np.logical_and(
-                     img[:, :, 0] == 0, img[:, :, 1] == 0),
-                img[:, :, 2] == 0))
-        #norm_valid_mask = img[:, :, 0] != 0
-        # norm_valid_mask = img[:, :, 1]
+        norm_valid_mask = img[:, :, 0] != 0
         norm_valid_mask = norm_valid_mask[:, :, np.newaxis]
         norm_gt = ((norm_gt.astype(np.float32) / 255.0) * 2.0) - 1.0
 
@@ -113,13 +117,15 @@ class NyuLoadPreprocess(Dataset):
                                                                  height=416, width=544)
 
         # color augmentation (default: True)
-        if self.args.data_augmentation_color:
-            if random.random() > 0.5:
-                img = data_utils.color_augmentation(img, indoors=True)
+        # if self.args.data_augmentation_color:
+        #     if random.random() > 0.5:
+        #         img = data_utils.color_augmentation(img, indoors=True)
 
-
+        #Image.fromarray((img*255).squeeze().astype(np.uint8), mode='L').save('/home/kalou/GithubP/FlowmapEstimation/img.png')
+        #Image.fromarray((norm_gt*255).squeeze().astype(np.uint8), mode='L').save('/home/kalou/GithubP/FlowmapEstimation/norm_gt.png')
         # to tensors
-        img = self.normalize(torch.from_numpy(img).permute(2, 0, 1))            # (3, H, W)
+        img = self.normalize(torch.from_numpy(img).repeat(1,1,3).permute(2, 0, 1))          # (3, H, W)
+
         norm_gt = torch.from_numpy(norm_gt).permute(2, 0, 1)                    # (3, H, W)
         ww = torch.from_numpy(ww)                            # (1, H, W)
         ww_gt = torch.from_numpy(ww_gt)                  # (1, H, W)

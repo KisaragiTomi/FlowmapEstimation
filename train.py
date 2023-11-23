@@ -102,23 +102,26 @@ class Discriminator(nn.Module):
     def __init__(self):
         super(Discriminator, self).__init__()
         self.model = nn.Sequential(
-            nn.Conv2d(3, 32, 4, 1, 0),
+            nn.Conv2d(3, 32, 2, 1, 0),
             nn.BatchNorm2d(32),
             nn.ReLU(True),
             nn.MaxPool2d(2),
-            nn.Conv2d(32, 32, 3, 2, 1),
+            nn.Conv2d(32, 32, 3, 1, 1),
             nn.BatchNorm2d(32),
             nn.ReLU(True),
             nn.MaxPool2d(2),
-            nn.Conv2d(32, 32, 3, 2, 1),
+            nn.Conv2d(32, 32, 3, 1, 1),
             nn.BatchNorm2d(32),
             nn.ReLU(True)
         )
-        self.out = nn.Linear(128, 1)
+        self.out = nn.Linear(512, 1)
 
-    def forward(self, x):
+    def forward(self, x, validmask):
+        #x = torch.mul(x, validmask)
         x = self.model(x)
-        x = x.view(-1, 128)
+        test = x
+        x = x.view(-1, 512)
+
         x = self.out(x)
         return torch.sigmoid(x)
 def set_requires_grad(net, requires_grad=False):
@@ -221,50 +224,50 @@ def train(model, args, device):
             else:
                 norm_out_list, pred_list, coord_list = model(img, gt_norm_mask=gt_norm_mask, mode='train')
 
-                if test == 50: #test
-                    norm_out = norm_out_list[-1]
-                    pred_norm = norm_out[:, :3, :, :]
-                    # pred_norm
-                    fixed_normal = gt_norm * 2 - 1
-                    fixed_pred_norm = pred_norm * 2 - 1
-                    fixed_normal = F.normalize(fixed_normal, p=2, dim=1)
-                    fixed_pred_norm = F.normalize(fixed_pred_norm, p=2, dim=1)
-                    dot = torch.cosine_similarity(fixed_pred_norm, fixed_normal, dim=1)
-                    dot = (gt_norm[:, 0, :, :].detach() < 0.5).float()
-                    dot = torch.cat([dot.unsqueeze(1)] * 3, dim=1)
-
-                    # dot = torch.acos(dot)
-                    #dot = (gt_norm[:, 0, :, :])
-                    #dottest = dot[0, :, :]
-                    v_gt_norm = F.normalize(gt_norm, p = 2, dim= 1)
-                    v_gt_norm = v_gt_norm.detach().cpu().permute(0, 2, 3, 1).numpy()
-                    v_pred_norm = pred_norm.detach().cpu().permute(0, 2, 3, 1).numpy()
-                    v_dot = dot.detach().cpu().permute(0, 2, 3, 1).numpy()
-                    v_dot *= 255
-                    pred_norm_rgb = ((v_pred_norm + 1) * 0.5) * 255
-                    pred_norm_rgb = np.clip(pred_norm_rgb, a_min=0, a_max=255)
-                    pred_norm_rgb = pred_norm_rgb.astype(np.uint8)  # (B, H, W, 3)
-                    gt_norm_rgb = ((v_gt_norm + 1) * 0.5) * 255
-                    gt_norm_rgb = np.clip(gt_norm_rgb, a_min=0, a_max=255)
-                    gt_norm_rgb = gt_norm_rgb.astype(np.uint8)  # (B, H, W, 3)
-                    v_dot = v_dot.astype(np.uint8)
-                    # dot_norm_rgb = ((dot + 1) * 0.5) * 255
-                    # dot_norm_rgb = np.clip(dot_norm_rgb, a_min=0, a_max=255)
-                    # dot_norm_rgb = dot_norm_rgb.astype(np.uint8)  # (B, H, W, 3)
-
-                    pred_target_path = './examples/results/pred_test.png'
-                    gt_target_path = './examples/results/gt_test.png'
-                    dot_target_path = './examples/results/dot_test.png'
-                    plt.imsave(pred_target_path, pred_norm_rgb[0, :, :, :])
-                    plt.imsave(gt_target_path, gt_norm_rgb[0, :, :, :])
-                    #pred_alpha = utils.kappa_to_alpha(dot)
-                    #target_path = '%s/%s_pred_alpha.png' % (results_dir, img_name)
-                    #a = dot[0, :, :].cpu().detach().numpy()
-                    #plt.imsave(dot_target_path, gt_norm_rgb[0, 0, :, :].cpu().detach().numpy())
-                    gt_norm_rgb[0, :, :, 1] = gt_norm_rgb[0, :, :, 0]
-                    gt_norm_rgb[0, :, :, 2] = gt_norm_rgb[0, :, :, 0]
-                    plt.imsave(dot_target_path, v_dot[0, :, :, :])
-                    test = 0
+                # if test == 50: #test
+                #     norm_out = norm_out_list[-1]
+                #     pred_norm = norm_out[:, :3, :, :]
+                #     # pred_norm
+                #     fixed_normal = gt_norm * 2 - 1
+                #     fixed_pred_norm = pred_norm * 2 - 1
+                #     fixed_normal = F.normalize(fixed_normal, p=2, dim=1)
+                #     fixed_pred_norm = F.normalize(fixed_pred_norm, p=2, dim=1)
+                #     dot = torch.cosine_similarity(fixed_pred_norm, fixed_normal, dim=1)
+                #     dot = (gt_norm[:, 0, :, :].detach() < 0.5).float()
+                #     dot = torch.cat([dot.unsqueeze(1)] * 3, dim=1)
+                #
+                #     # dot = torch.acos(dot)
+                #     #dot = (gt_norm[:, 0, :, :])
+                #     #dottest = dot[0, :, :]
+                #     v_gt_norm = F.normalize(gt_norm, p = 2, dim= 1)
+                #     v_gt_norm = v_gt_norm.detach().cpu().permute(0, 2, 3, 1).numpy()
+                #     v_pred_norm = pred_norm.detach().cpu().permute(0, 2, 3, 1).numpy()
+                #     v_dot = dot.detach().cpu().permute(0, 2, 3, 1).numpy()
+                #     v_dot *= 255
+                #     pred_norm_rgb = ((v_pred_norm + 1) * 0.5) * 255
+                #     pred_norm_rgb = np.clip(pred_norm_rgb, a_min=0, a_max=255)
+                #     pred_norm_rgb = pred_norm_rgb.astype(np.uint8)  # (B, H, W, 3)
+                #     gt_norm_rgb = ((v_gt_norm + 1) * 0.5) * 255
+                #     gt_norm_rgb = np.clip(gt_norm_rgb, a_min=0, a_max=255)
+                #     gt_norm_rgb = gt_norm_rgb.astype(np.uint8)  # (B, H, W, 3)
+                #     v_dot = v_dot.astype(np.uint8)
+                #     # dot_norm_rgb = ((dot + 1) * 0.5) * 255
+                #     # dot_norm_rgb = np.clip(dot_norm_rgb, a_min=0, a_max=255)
+                #     # dot_norm_rgb = dot_norm_rgb.astype(np.uint8)  # (B, H, W, 3)
+                #
+                #     pred_target_path = './examples/results/pred_test.png'
+                #     gt_target_path = './examples/results/gt_test.png'
+                #     dot_target_path = './examples/results/dot_test.png'
+                #     plt.imsave(pred_target_path, pred_norm_rgb[0, :, :, :])
+                #     plt.imsave(gt_target_path, gt_norm_rgb[0, :, :, :])
+                #     #pred_alpha = utils.kappa_to_alpha(dot)
+                #     #target_path = '%s/%s_pred_alpha.png' % (results_dir, img_name)
+                #     #a = dot[0, :, :].cpu().detach().numpy()
+                #     #plt.imsave(dot_target_path, gt_norm_rgb[0, 0, :, :].cpu().detach().numpy())
+                #     gt_norm_rgb[0, :, :, 1] = gt_norm_rgb[0, :, :, 0]
+                #     gt_norm_rgb[0, :, :, 2] = gt_norm_rgb[0, :, :, 0]
+                #     plt.imsave(dot_target_path, v_dot[0, :, :, :])
+                #     test = 0
 
                 loss = loss_fn(pred_list, coord_list, gt_norm, gt_norm_mask)
 
@@ -311,18 +314,25 @@ def train(model, args, device):
             norm_out = norm_out_list[-1]
             pred = norm_out[:, :3, :, :]
 
-            for a in range(12):
-                for b in range(16):
-                    row = 39 * a
-                    col = 39 * b
+            patchsize = 19
+            loss_D = 0
+            for a in range(int(480/(patchsize+1))):
+                for b in range(int(640/(patchsize+1))):
+                    row = patchsize * a
+                    col = patchsize * b
                     pred_norm = pred[:, 0:3, :, :]
-                    patch_fake = pred_norm[:, :, row:row + 39, col:col + 39]
-                    patch_real = gt_norm[:, :, row:row + 39, col:col + 39]
-                    pred_fake = discriminator(patch_fake.detach())
-                    pred_real = discriminator(patch_real)
-                    loss_D_fake = criterion_GAN(pred_fake, zeros_T)
-                    loss_D_real = criterion_GAN(pred_real, valid_T)
-                    loss_D += 0.5 * (loss_D_fake + loss_D_real)
+                    patch_fake = pred_norm[:, :, row:row + patchsize, col:col + patchsize]
+                    patch_real = gt_norm[:, :, row:row + patchsize, col:col + patchsize]
+                    patch_validmask = gt_norm_mask[:, :, row:row + patchsize, col:col + patchsize]
+                    testmask = patch_validmask.detach().cpu().permute(0, 2, 3, 1).numpy()
+                    testmult = torch.mul(patch_fake, patch_validmask)
+                    testmult = testmult.detach().cpu().permute(0, 2, 3, 1).numpy()
+                    if patch_validmask.any():
+                        pred_fake = discriminator(patch_fake.detach(), patch_validmask)
+                        pred_real = discriminator(patch_real, patch_validmask)
+                        loss_D_fake = criterion_GAN(pred_fake, zeros_T)
+                        loss_D_real = criterion_GAN(pred_real, valid_T)
+                        loss_D += 0.5 * (loss_D_fake + loss_D_real)
 
             scaler_D.scale(loss_D).backward()
             scaler_D.unscale_(optimizer_D)
