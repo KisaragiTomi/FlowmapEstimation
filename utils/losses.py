@@ -172,11 +172,9 @@ class compute_loss(nn.Module):
                     loss = loss + torch.mean(loss_pixelwise)
 
                 elif self.loss_type == 'UG_NLL_ours':
-                    fixed_normal = gt_norm_ * 2 - 1
-                    fixed_pred_norm = pred_norm * 2 - 1
-                    fixed_normal = F.normalize(fixed_normal, p = 2, dim= 1)
-                    fixed_pred_norm = F.normalize(fixed_pred_norm, p = 2, dim= 1)
-                    dot = torch.cosine_similarity(fixed_pred_norm, fixed_normal, dim=1)  # (B, N)
+                    gt_norm_ = F.normalize(gt_norm_, p = 2, dim= 1)
+                    pred_norm = F.normalize(pred_norm, p = 2, dim= 1)
+                    dot = torch.cosine_similarity(pred_norm, gt_norm_, dim=1)  # (B, N)
 
                     #dot = torch.pow(dot, 0.5)
                     valid_mask = gt_norm_mask_[:, 0, :].float() \
@@ -194,8 +192,7 @@ class compute_loss(nn.Module):
                     a2 = torch.mean(torch.acos(dot))
                     a3 = torch.mean(torch.log(1 + torch.exp(-kappa * np.pi)))
 
-                    #loss = loss - dot
-                    #a2 = torch.mean(dot)
+
                     loss = loss + a2
                     #a = loss.data.item()
 

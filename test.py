@@ -30,12 +30,12 @@ def test(model, test_loader, device, results_dir):
             norm_out = norm_out_list[-1]
 
             pred_norm = norm_out[:, :3, :, :]
-            pred_kappa = norm_out[:, 3:, :, :]
+            pred_height = norm_out[:, 3:, :, :]
 
             # to numpy arrays
             img = img.detach().cpu().permute(0, 2, 3, 1).numpy()                    # (B, H, W, 3)
             pred_norm = pred_norm.detach().cpu().permute(0, 2, 3, 1).numpy()        # (B, H, W, 3)
-            pred_kappa = pred_kappa.cpu().permute(0, 2, 3, 1).numpy()
+            pred_height = pred_height.cpu().permute(0, 2, 3, 1).numpy()
 
             # save results
             img_name = data_dict['img_name'][0]
@@ -57,7 +57,9 @@ def test(model, test_loader, device, results_dir):
             plt.imsave(target_path, pred_norm_rgb[0, :, :, :])
 
             # 3. predicted kappa (concentration parameter)
-            target_path = '%s/%s_pred_kappa.png' % (results_dir, img_name)
+            target_path = '%s/%s_pred_height.png' % (results_dir, img_name)
+            height = Image.fromarray(pred_height.astype(np.uint16))
+            height.save(target_path, bits=16)
 #            plt.imsave(target_path, pred_kappa[0, :, :, 0], vmin=0.0, vmax=kappa_max, cmap='gray')
 
             # 4. predicted uncertainty

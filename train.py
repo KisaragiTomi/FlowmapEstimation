@@ -63,14 +63,13 @@ class berHuLoss(nn.Module):
     def __init__(self):
         super(berHuLoss, self).__init__()
 
-    def forward(self, pred, target):
+    def forward(self, pred, target, valid_mask):
         assert pred.dim() == target.dim(), "inconsistent dimensions"
 
-        huber_c = torch.max(pred - target)
+        huber_c = torch.max(torch.norm(pred, dim=1, keepdim=True) - torch.norm(target, dim=1, keepdim=True))
         huber_c = 0.2 * huber_c
 
-        valid_mask = (target > 0).detach()
-        diff = target - pred
+        diff = torch.norm(target, dim=1, keepdim=True) - torch.norm(pred, dim=1, keepdim=True)
         diff = diff[valid_mask]
         diff = diff.abs()
 
@@ -117,7 +116,7 @@ class Discriminator(nn.Module):
         self.out = nn.Linear(512, 1)
 
     def forward(self, x, validmask):
-        #x = torch.mul(x, validmask)
+        x = torch.mul(x, validmask)
         x = self.model(x)
         test = x
         x = x.view(-1, 512)
@@ -213,6 +212,7 @@ def train(model, args, device):
             # data to device
             img = data_dict['img'].to(device)
             gt_norm = data_dict['norm'].to(device)
+            gt_height = data_dict['height'].to(device)
             gt_norm_mask = data_dict['norm_valid_mask'].to(device)
 
 
@@ -271,7 +271,15 @@ def train(model, args, device):
 
                 loss = loss_fn(pred_list, coord_list, gt_norm, gt_norm_mask)
 
-
+            #loss_L1 = criterion_L1(pred, target)
+            #loss_MSE = criterion_MSE(pred, target)
+            norm_out = norm_out_list[-1]
+            pred = norm_out[:, :3, :, :]
+            pred_height = norm_out[:, 3, :, :].unsqueeze(1)
+            loss_berHu_normlength = criterion_berHu(pred, gt_norm, gt_norm_mask)
+            loss_berHu_height = criterion_berHu(pred_height, gt_height, gt_norm_mask)
+            #loss_berHu = criterion_berHu(pred_depth, gt_norm, gt_norm_mask)
+            loss += loss_berHu_normlength + loss_berHu_height
             loss_ = float(loss.data.cpu().numpy())
             if args.rank == 0:
                 t_loader.set_description(f"Epoch: {epoch + 1}/{args.n_epochs}. Loop: Train. Loss: {'%.5f' % loss_}")
@@ -320,7 +328,8 @@ def train(model, args, device):
                 for b in range(int(640/(patchsize+1))):
                     row = patchsize * a
                     col = patchsize * b
-                    pred_norm = pred[:, 0:3, :, :]
+                    pred_norm = pred[:, :3, :, :]
+                    #pred_height = norm_out[:, 3, :, :]
                     patch_fake = pred_norm[:, :, row:row + patchsize, col:col + patchsize]
                     patch_real = gt_norm[:, :, row:row + patchsize, col:col + patchsize]
                     patch_validmask = gt_norm_mask[:, :, row:row + patchsize, col:col + patchsize]
