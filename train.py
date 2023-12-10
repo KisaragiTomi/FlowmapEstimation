@@ -364,7 +364,7 @@ def train(model, args, device):
                 torch.save({"model": model.state_dict(),
                             "iter": total_iter}, target_path)
                 print('model saved / path: {}'.format(target_path))
-                validate(model, args, test_loader, device, total_iter, args.eval_acc_txt)
+                #validate(model, args, test_loader, device, total_iter, args.eval_acc_txt)
                 model.train()
 
                 # empty cache
@@ -376,7 +376,7 @@ def train(model, args, device):
         torch.save({"model": model.state_dict(),
                     "iter": total_iter}, target_path)
         print('model saved / path: {}'.format(target_path))
-        validate(model, args, test_loader, device, total_iter, args.eval_acc_txt)
+        #validate(model, args, test_loader, device, total_iter, args.eval_acc_txt)
 
         # empty cache
         torch.cuda.empty_cache()

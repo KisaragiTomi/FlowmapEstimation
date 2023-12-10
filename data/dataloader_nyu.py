@@ -71,6 +71,7 @@ class NyuLoadPreprocess(Dataset):
         # img path and norm path
         img_path = self.dataset_path + '/' + sample_path.split()[0]
         norm_path = self.dataset_path + '/' + sample_path.split()[1]
+#        print(sample_path.split()[2])
         height_path = self.dataset_path + '/' + sample_path.split()[2]
         scene_name = self.mode
         img_name = img_path.split('/')[-1].split('.png')[0]

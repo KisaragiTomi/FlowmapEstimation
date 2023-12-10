@@ -22,23 +22,26 @@ def test(model, test_loader, device, results_dir):
     kappa_max = 30
 
     with torch.no_grad():
-        for data_dict in tqdm(test_loader):
-
+        for index in range(len(test_loader.dataset)):
+            print('process image' + str(index))
+            data_dict = test_loader.dataset[index]
             img = data_dict['img'].to(device)
+            img = img.unsqueeze(0)
             test = model(img)
             norm_out_list, _, _ = model(img)
             norm_out = norm_out_list[-1]
 
             pred_norm = norm_out[:, :3, :, :]
-            pred_height = norm_out[:, 3:, :, :]
+            pred_height = norm_out[:, [3], :, :]
 
             # to numpy arrays
             img = img.detach().cpu().permute(0, 2, 3, 1).numpy()                    # (B, H, W, 3)
             pred_norm = pred_norm.detach().cpu().permute(0, 2, 3, 1).numpy()        # (B, H, W, 3)
             pred_height = pred_height.cpu().permute(0, 2, 3, 1).numpy()
+            pred_height = np.squeeze(pred_height)
 
             # save results
-            img_name = data_dict['img_name'][0]
+            img_name = data_dict['img_name']
 
             # 1. save input image
             img = utils.unnormalize(img[0, ...])
@@ -52,18 +55,19 @@ def test(model, test_loader, device, results_dir):
             pred_norm_rgb = ((pred_norm + 1) * 0.5) * 255
             pred_norm_rgb = np.clip(pred_norm_rgb, a_min=0, a_max=255)
             pred_norm_rgb = pred_norm_rgb.astype(np.uint8)                  # (B, H, W, 3)
+            pred_height *= 65535
 
             target_path = '%s/%s_pred_norm.png' % (results_dir, img_name)
             plt.imsave(target_path, pred_norm_rgb[0, :, :, :])
 
             # 3. predicted kappa (concentration parameter)
-            target_path = '%s/%s_pred_height.png' % (results_dir, img_name)
-            height = Image.fromarray(pred_height.astype(np.uint16))
-            height.save(target_path, bits=16)
+            # target_path = '%s/%s_pred_height.png' % (results_dir, img_name)
+            # height = Image.fromarray(pred_height.astype(np.uint16))
+            # height.save(target_path, bits=16)
 #            plt.imsave(target_path, pred_kappa[0, :, :, 0], vmin=0.0, vmax=kappa_max, cmap='gray')
 
             # 4. predicted uncertainty
-            pred_alpha = utils.kappa_to_alpha(pred_kappa)
+            #pred_alpha = utils.kappa_to_alpha(pred_kappa)
             target_path = '%s/%s_pred_alpha.png' % (results_dir, img_name)
 #            plt.imsave(target_path, pred_alpha[0, :, :, 0], vmin=0.0, vmax=alpha_max, cmap='jet')
 
